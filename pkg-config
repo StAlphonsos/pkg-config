@@ -1,5 +1,5 @@
 #!/usr/bin/perl
-# $OpenBSD: pkg-config,v 1.71 2012/03/19 10:25:17 ajacoutot Exp $
+# $OpenBSD: pkg-config,v 1.85 2014/11/17 22:16:23 jca Exp $
 # $CSK: pkgconfig.pl,v 1.39 2006/11/27 16:26:20 ckuethe Exp $
 
 # Copyright (c) 2006 Chris Kuethe <ckuethe@openbsd.org>
@@ -46,7 +46,7 @@ my $allow_uninstalled =
 	defined $ENV{PKG_CONFIG_DISABLE_UNINSTALLED} ? 0 : 1;
 my $found_uninstalled = 0;
 
-my $version = 0.26; # pretend to be this version of pkgconfig
+my $version = '0.27.1'; # pretend to be this version of pkgconfig
 
 my %configs = ();
 setup_self();
@@ -113,7 +113,7 @@ GetOptions(	'debug' 		=> \$mode{debug},
 # may not have been passed explicitly, but we don't want to re-order
 # and simplify the libs like we do for shared architectures.
 {
-	my @static_archs = qw(m88k vax);
+	my @static_archs = qw(vax);
 	my $machine_arch = $Config{'ARCH'};
 	if (grep { $_ eq $machine_arch } @static_archs){
 		$mode{static} = 1;
@@ -154,11 +154,18 @@ if ($mode{list}) {
 my $cfg_full_list = [];
 my $top_config = [];
 
+# When we got here we're supposed to have had at least one
+# package as argument.
+if (!@ARGV){
+	say_error("No package name(s) specified.");
+	exit 1;
+}
+
 while (@ARGV){
 	my $p = shift @ARGV;
 	my $op = undef;
 	my $v = undef;
-	if (@ARGV >= 2  && $ARGV[0] =~ /^[<=>]+$/ &&
+	if (@ARGV >= 2  && $ARGV[0] =~ /^[<=>!]+$/ &&
 	    $ARGV[1] =~ /^[\d\.]+[\w\.]*$/) {
 	    	$op = shift @ARGV;
 		$v = shift @ARGV;
@@ -208,7 +215,7 @@ if ($mode{exactversion}) {
 	exit $rc;
 }
 
-if ($mode{minversion}) {
+if ($mode{maxversion}) {
 	my $v = $mode{maxversion};
 	for my $pkg (@$top_config) {
 		$rc = 1 unless versionmatch($configs{$pkg}, '<=', $v);
@@ -226,7 +233,9 @@ if ($mode{variable}) {
 
 my $dep_cfg_list = $cfg_full_list;
 
-if (!$mode{static}){
+if ($mode{static}){
+	$dep_cfg_list = [reverse(@$cfg_full_list)];
+} else {
 	$dep_cfg_list = simplify_and_reverse($cfg_full_list);
 }
 
@@ -278,7 +287,8 @@ sub handle_config
 
 	if (defined $mode{cflags}
 	    or ($mode{static} && $mode{libs})
-	    or $mode{printrequiresprivate}) {
+	    or $mode{printrequiresprivate}
+    	    or $mode{exists}) {
 		&$get_props("Requires.private");
 	}
 	&$get_props("Requires");
@@ -348,9 +358,7 @@ sub validate_config
 	# Check if we're dealing with an empty file, but don't error out just
 	# yet, we'll do that when we realize there's no Name field.
 	if (stat($f)->size == 0) {
-		my $p = $f;
-		$p =~ s/(^.*\/)(.*?)$/$2/g;
-		say_error("Package file '$p' appears to be empty");
+		say_error("Package file '$f' appears to be empty");
 	}
 
 	foreach (@required_elems) {
@@ -380,7 +388,9 @@ sub setup_self
 sub find_config
 {
 	my ($p) = @_;
-	my $f = pathresolve($p);
+
+	# Differentiate between getting a full path and just the module name.
+	my $f = ($p =~ m/\.pc$/ ? $p : pathresolve($p));
 
 	return get_config($f) if defined($f);
 
@@ -579,6 +589,8 @@ Usage: $0 [options]
 --uninstalled - allow for uninstalled versions to be used
 --static - adjust output for static linking
 --atleast-version [version] - require a certain version of a package
+--exact-version [version] - require exactly the specified version of a package
+--max-version [version] - require at most a certain version of a package
 --modversion [package] - query the version of a package
 --variable var package - return the definition of <var> in <package>
 EOF
@@ -623,6 +635,18 @@ sub compare
 		say_debug("valid suffix $1$2 found in $b$1$2.");
 		$suffix_b[0] = $1;
 		$suffix_b[1] = $2;
+	}
+
+	# The above are standard suffixes; deal with single alphabetical
+	# suffixes too, e.g. 1.0.1h
+	if ($a =~ s/([a-zA-Z]){1}$//) {
+	    say_debug("valid suffix $1 found in $a$1.");
+	    $suffix_a[0] = $1;
+	}
+
+	if ($b =~ s/([a-zA-Z]){1}$//) {
+	    say_debug("valid suffix $1 found in $b$1.");
+	    $suffix_b[0] = $1;
 	}
 
 	my @a = split(/\./, $a);
@@ -693,9 +717,9 @@ sub compare_numeric
 {
 	my ($x, $y, $eq) = @_;
 
-	return 1 if $x > $y;
+	return  1 if $x > $y;
 	return -1 if $x < $y;
-	return 0 if (($x == $y) and ($eq == 1));
+	return  0 if (($x == $y) and ($eq == 1));
 	return undef;
 }
 

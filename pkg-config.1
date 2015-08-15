@@ -1,4 +1,4 @@
-.\"	$OpenBSD: pkg-config.1,v 1.26 2012/03/19 10:25:17 ajacoutot Exp $
+.\"	$OpenBSD: pkg-config.1,v 1.31 2015/02/28 21:51:56 bentley Exp $
 .\"
 .\"	Copyright (c) 2006 Chris Kuethe <ckuethe@openbsd.org>
 .\"
@@ -14,7 +14,7 @@
 .\"	ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF
 .\"	OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 .\"
-.Dd $Mdocdate: March 19 2012 $
+.Dd $Mdocdate: February 28 2015 $
 .Dt PKG-CONFIG 1
 .Os
 .Sh NAME
@@ -42,7 +42,7 @@ Libraries from base install their metadata in
 .Pa /usr/lib/pkgconfig ;
 packages controlled by the
 .Xr ports 7
-system store their metadata, if provided, in
+system store their metadata in
 .Pa ${LOCALBASE}/lib/pkgconfig
 and
 .Pa ${LOCALBASE}/share/pkgconfig ;
@@ -84,10 +84,13 @@ compile against the package.
 Enable internal development and debugging messages.
 .It Cm --errors-to-stdout
 Direct error messages to stdout rather than stderr.
+.It Cm --exact-version Ar version
+Exit with error if the specified packages's version does not equal the
+specified version.
 .It Cm --exists
 Return true if all the specified packages are installed.
 This is the default operation.
-.It Cm --help \*(Ba --usage
+.It Cm --help | --usage
 Print a help message and exit.
 .It Cm --libs
 Return all linker flags required to link against the package.
@@ -102,6 +105,9 @@ Return linker flags, other than the library and path flags, required to
 compile against the package.
 .It Cm --list-all
 List all installed packages and exit.
+.It Cm --max-version Ar version
+Exit with error if the specified package's version is greater than
+the specified version.
 .It Cm --modversion
 Fetch package version.
 If no package is given,
@@ -188,15 +194,15 @@ utility first appeared in
 .Sh AUTHORS
 .Nm
 was written by
-.An Chris Kuethe Aq ckuethe@openbsd.org
+.An Chris Kuethe Aq Mt ckuethe@openbsd.org
 as a replacement for the original freedesktop.org
 .Nm
 implementation.
 It was later extended and kept in sync (where relevant) with the original
 version by
-.An Marc Espie Aq espie@openbsd.org
+.An Marc Espie Aq Mt espie@openbsd.org
 and
-.An Jasper Lievisse Adriaanse Aq jasper@openbsd.org .
+.An Jasper Lievisse Adriaanse Aq Mt jasper@openbsd.org .
 .Sh CAVEATS
 .Nm
 is a re-implementation of the "original" freedesktop.org program.
@@ -219,15 +225,6 @@ The
 flag that can be encountered in Cflags is not treated differently from
 .Fl I
 in this implementation.
-.It Ev Variables
-Due to the way variables are retrieved and expanded, in this version of
-.Nm
-certain syntax that is valid in the original implementation is not
-allowed in this
-.Nm .
-For example storing requirements in a variable, and only using this
-variable in the Requires field, is not allowed.
-Otherwise all the variable values can be treated as a (valid) package.
 .It Ev Whitespace
 .Nm
 does not go to great lengths to try to fix whitespace abuse.

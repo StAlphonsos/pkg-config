@@ -1,5 +1,5 @@
 # ex:ts=8 sw=4:
-# $OpenBSD: PkgConfig.pm,v 1.1 2012/06/11 10:16:46 espie Exp $
+# $OpenBSD: PkgConfig.pm,v 1.5 2014/03/31 18:16:24 jasper Exp $
 #
 # Copyright (c) 2006 Marc Espie <espie@openbsd.org>
 #
@@ -58,7 +58,17 @@ sub add_variable
 		die "Duplicate variable $name";
 	}
 	push(@{$self->{vlist}}, $name);
-	$self->{variables}->{$name} = $value;
+	$self->{variables}->{$name} = ($value =~ s/^\"|\"$//rg);
+}
+
+sub parse_value
+{
+	my ($self, $name, $value) = @_;
+	if (defined $parse->{$name}) {
+		return $parse->{$name}($value);
+	} else {
+		return [split /(?<!\\)\s+/o, $value];
+	}
 }
 
 sub add_property
@@ -70,11 +80,7 @@ sub add_property
 	push(@{$self->{proplist}}, $name);
 	my $v;
 	if (defined $value) {
-		if (defined $parse->{$name}) {
-			$v = $parse->{$name}($value);
-		} else {
-			$v = [split /(?<!\\)\s+/o, $value];
-		}
+		$v = $self->parse_value($name, $value);
 	} else {
 		$v = [];
 	}
@@ -85,7 +91,7 @@ sub read_fh
 {
 	my ($class, $fh, $name) = @_;
 	my $cfg = $class->new;
-	my $_;
+	#my $_;
 
 	$name = '' if !defined $name;
 	while (<$fh>) {
@@ -188,7 +194,11 @@ sub expanded
 		sub {
 			my $var = shift;
 			if (defined $extra->{$var}) {
-				return $extra->{$var};
+			    if ($extra->{$var} =~ m/\$\{.*\}/ ) {
+	  			return undef;
+	                    } else {
+	  			return $extra->{$var};
+              		    }
 			} elsif (defined $self->{variables}->{$var}) {
 				return $self->{variables}->{$var};
 			} else {
@@ -196,7 +206,14 @@ sub expanded
 			}
 	};
 
-	while ($v =~ s/\$\{(.*?)\}/&$get_value($1)/ge) {
+	# Expand all variables, unless the returned value is defined as an
+	# as an unexpandable variable (such as with --defined-variable).
+	while ($v =~ m/\$\{(.*?)\}/) {
+	    unless (defined &$get_value($1)) {
+		$v =~ s/\$\{(.*?)\}/$extra->{$1}/g;
+		last;
+	    }
+	    $v =~ s/\$\{(.*?)\}/&$get_value($1)/ge;
 	}
 	return $v;
 }
@@ -211,7 +228,14 @@ sub get_property
 	}
 	my $r = [];
 	for my $v (@$l) {
-		push(@$r, $self->expanded($v, $extra));
+		my $w = $self->expanded($v, $extra);
+		# Optimization: don't bother reparsing if value didn't change
+		if ($w ne $v) {
+			my $l = $self->parse_value($k, $w);
+			push(@$r, @$l);
+		} else {
+			push(@$r, $w);
+		}
 	}
 	return $r;
 }
