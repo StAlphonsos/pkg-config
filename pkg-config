@@ -48,6 +48,10 @@ my $found_uninstalled = 0;
 
 my $version = '0.27.1'; # pretend to be this version of pkgconfig
 
+# Regexp that captures our idea of a version number which accomodates
+# version numbers found in practice in e.g. the ports tree:
+my $vers_regexp = qr/^([\d\.]+)(|(-stable|rc|beta|alpha|[a-zA-Z])(|\d+))*$/;
+
 my %configs = ();
 setup_self();
 
@@ -166,7 +170,7 @@ while (@ARGV){
 	my $op = undef;
 	my $v = undef;
 	if (@ARGV >= 2  && $ARGV[0] =~ /^[<=>!]+$/ &&
-	    $ARGV[1] =~ /^[\d\.]+[\w\.]*$/) {
+	    $ARGV[1] =~ $vers_regexp) {
 	    	$op = shift @ARGV;
 		$v = shift @ARGV;
 	}
@@ -623,30 +627,23 @@ sub compare
 	return 0 if ($a eq $b);
 
 	# is there a valid non-numeric suffix to deal with later?
-	# accepted are (in order): a(lpha) < b(eta) < rc < ' '.
+	# accepted are listed in $vers_regexp, above, and are compared
+	# in alphabetical order, so e.g. 'beta' beats 'alpha'.
 	# suffix[0] is the 'alpha' part, suffix[1] is the '1' part in 'alpha1'.
-	if ($a =~ s/(rc|beta|b|alpha|a)(\d+)$//) {
-		say_debug("valid suffix $1$2 found in $a$1$2.");
-		$suffix_a[0] = $1;
-		$suffix_a[1] = $2;
+	# $2 will be the optional separator (currently nothing or dash)
+	if ($a =~ $vers_regexp && ($3 || $4)) {
+		$a = $1;
+		say_debug("valid suffix $3$4 found in $a$3$4");
+		$suffix_a[0] = $3;
+		$suffix_a[0] =~ s/^-//;
+		$suffix_a[1] = $4 || 0;
 	}
-
-	if ($b =~ s/(rc|beta|b|alpha|a)(\d+)$//) {
-		say_debug("valid suffix $1$2 found in $b$1$2.");
-		$suffix_b[0] = $1;
-		$suffix_b[1] = $2;
-	}
-
-	# The above are standard suffixes; deal with single alphabetical
-	# suffixes too, e.g. 1.0.1h
-	if ($a =~ s/([a-zA-Z]){1}$//) {
-	    say_debug("valid suffix $1 found in $a$1.");
-	    $suffix_a[0] = $1;
-	}
-
-	if ($b =~ s/([a-zA-Z]){1}$//) {
-	    say_debug("valid suffix $1 found in $b$1.");
-	    $suffix_b[0] = $1;
+	if ($b =~ $vers_regexp && ($3 || $4)) {
+		$b = $1;
+		say_debug("valid suffix $3$4 found in $b$3$4");
+		$suffix_b[0] = $3;
+		$suffix_b[0] =~ s/^-//;
+		$suffix_b[1] = $4 || 0;
 	}
 
 	my @a = split(/\./, $a);
