@@ -113,6 +113,17 @@ GetOptions(	'debug' 		=> \$mode{debug},
 		'define-variable=s' 	=> $variables,
 	);
 
+# If --errors-to-stdout was given, close STDERR (to be safe),
+# then dup the output to STDOUT and delete the key from %mode so we
+# won't keep checking it. STDERR stays dup'ed.
+# We do this early so any other warnings also get redirected, since
+# they might indicate a bug that a regression test should catch.
+if ($mode{estdout}) {
+	close(STDERR);
+	open(STDERR, ">&STDOUT") or die "Can't dup STDOUT: $!";
+	delete($mode{estdout});
+}
+
 # Unconditionally switch to static mode on static arches as --static
 # may not have been passed explicitly, but we don't want to re-order
 # and simplify the libs like we do for shared architectures.
@@ -820,15 +831,6 @@ sub say_warning
 sub say_msg
 {
 	my $str = shift;
-
-	# If --errors-to-stdout was given, close STDERR (to be safe),
-	# then dup the output to STDOUT and delete the key from %mode so we
-	# won't keep checking it. STDERR stays dup'ed.
-	if ($mode{estdout}) {
-		close(STDERR);
-		open(STDERR, ">&STDOUT") or die "Can't dup STDOUT: $!";
-		delete($mode{estdout});
-	}
 
 	print STDERR $str . "\n";
 }
